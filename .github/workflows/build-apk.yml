@@ -47,5 +47,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
-          name: 8 Ball Pool build ${{ github.run_number }}
+          name: Biliar 8 build ${{ github.run_number }}
           files: pool8.apk

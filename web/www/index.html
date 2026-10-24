@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="id"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
-<title>8 Ball Pool</title>
+<title>Biliar 8</title>
 <style>
 html,body{margin:0;height:100%;background:#14110f;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
 canvas{display:block;width:100%;height:100%}
@@ -11,31 +11,34 @@ const cv=document.getElementById('c'),g=cv.getContext('2d');
 const LW=1100,LH=560,L=40,T=40,Rt=960,B=520,R=12,N=4,FR=Math.pow(.987,1/N);
 const COL=[0,'#f2b705','#1f4fd8','#d62828','#6a2c91','#f07b1a','#0f7a3d','#8a2a1a'];
 const PK=[[L-4,T-4,26],[Rt+4,T-4,26],[L-4,B+4,26],[Rt+4,B+4,26],[500,T-8,24],[500,B+8,24]];
-let S=1,OX=0,OY=0,balls,turn,grp,hand,brk,state,msg,a,power,shot,drag=null;
+let S=1,OX=0,OY=0,balls,turn,grp,hand,brk,state,msg,a,power,shot,sx=0,sy=0,drag=null;
 
 function fit(){const d=devicePixelRatio||1,w=innerWidth,h=innerHeight;cv.width=w*d;cv.height=h*d;
  S=Math.min(w/LW,h/LH);OX=(w-LW*S)/2;OY=(h-LH*S)/2;g.setTransform(S*d,0,0,S*d,OX*d,OY*d)}
 addEventListener('resize',fit);fit();
 
-function newGame(){
+function rack(){
  const nums=[1,2,3,4,5,6,7,9,10,11,12,13,14,15].sort(()=>Math.random()-.5);nums.splice(4,0,8);
  balls=[{n:0,x:280,y:280,vx:0,vy:0}];
  const dx=R*1.732+.5,dy=2*R+.5;let k=0;
  for(let c=0;c<5;c++)for(let r=0;r<=c;r++)balls.push({n:nums[k++],x:700+c*dx,y:280+(r-c/2)*dy,vx:0,vy:0});
- turn=0;grp=[null,null];hand=false;brk=true;state='aim';a=0;power=0;
- msg='Geser di meja untuk membidik, tarik tuas kanan untuk memukul';
+}
+function newGame(){
+ rack();turn=0;grp=[null,null];hand=false;brk=true;state='aim';a=0;power=0;sx=sy=0;
+ msg='Break! Geser di meja untuk membidik';
 }
 
 function step(){
  for(const b of balls){
   if(b.out)continue;
-  b.x+=b.vx/N;b.y+=b.vy/N;
+  b.x+=b.vx/N;b.y+=b.vy/N;let w=0;
   for(const p of PK)if(Math.hypot(b.x-p[0],b.y-p[1])<p[2]){b.out=true;b.vx=b.vy=0;shot.p.push(b.n);break}
   if(b.out)continue;
-  if(b.x<L+R){b.x=L+R;b.vx=Math.abs(b.vx)*.8}
-  if(b.x>Rt-R){b.x=Rt-R;b.vx=-Math.abs(b.vx)*.8}
-  if(b.y<T+R){b.y=T+R;b.vy=Math.abs(b.vy)*.8}
-  if(b.y>B-R){b.y=B-R;b.vy=-Math.abs(b.vy)*.8}
+  if(b.x<L+R){b.x=L+R;b.vx=Math.abs(b.vx)*.8;w=1}
+  if(b.x>Rt-R){b.x=Rt-R;b.vx=-Math.abs(b.vx)*.8;w=1}
+  if(b.y<T+R){b.y=T+R;b.vy=Math.abs(b.vy)*.8;w=1}
+  if(b.y>B-R){b.y=B-R;b.vy=-Math.abs(b.vy)*.8;w=1}
+  if(w)rail(b);
   b.vx*=FR;b.vy*=FR;
   if(Math.hypot(b.vx,b.vy)<.12)b.vx=b.vy=0;
  }
@@ -48,29 +51,42 @@ function step(){
     const rv=(q.vx-p.vx)*nx+(q.vy-p.vy)*ny;
     if(rv<0){const im=-(1+.96)*rv/2;
      p.vx-=im*nx;p.vy-=im*ny;q.vx+=im*nx;q.vy+=im*ny;
-     if(shot.first==null&&(p.n==0||q.n==0))shot.first=p.n==0?q.n:p.n}
+     if(p.n==0||q.n==0){const cb=p.n==0?p:q,k=p.n==0?1:-1;
+      if(shot.first==null)shot.first=cb==p?q.n:p.n;
+      if(cb.top){cb.vx+=nx*k*cb.top*.5;cb.vy+=ny*k*cb.top*.5;cb.top=0}}}
    }}}
 }
 
 function shoot(){
  const c=balls[0],s=power*26;
- c.vx=Math.cos(a)*s;c.vy=Math.sin(a)*s;power=0;
- shot={first:null,p:[]};state='roll';msg='';
+ c.vx=Math.cos(a)*s;c.vy=Math.sin(a)*s;c.top=-sy*s*.8;c.side=sx*.35;power=0;
+ shot={first:null,p:[],rail:false,cu:new Set()};state='roll';msg='';
 }
 
+function rail(b){
+ if(shot.first!=null)shot.rail=true;
+ if(b.n>0)shot.cu.add(b.n);
+ if(b.n==0&&b.side){const t=b.side,c=Math.cos(t),s=Math.sin(t),x=b.vx,y=b.vy;b.vx=x*c-y*s;b.vy=x*s+y*c;b.side*=.6}
+}
 function endShot(){
- const me=turn,o=1-me,pb=shot.p,pp=pb.filter(n=>n>0);
+ const me=turn,o=1-me,pb=shot.p,pp=pb.filter(n=>n>0),f=shot.first;
  const gn=n=>n<8?'Bulat':'Strip';
  const left=G=>balls.filter(b=>!b.out&&b.n>0&&b.n!=8&&gn(b.n)==G).length;
- let foul=pb.includes(0)||shot.first==null,G=grp[me];
- if(!foul&&G){const f=shot.first,cb=left(G)+pp.filter(n=>n!=8&&gn(n)==G).length==0;
-  if(f==8?!cb:gn(f)!=G)foul=true}
- if(pp.includes(8)){const ok=!foul&&G&&left(G)==0;finish(ok?me:o);return}
- if(!G&&!brk&&!foul&&pp.length){grp[me]=gn(pp[0]);grp[o]=grp[me]=='Bulat'?'Strip':'Bulat';G=grp[me]}
+ let G=grp[me],why='';
+ if(brk&&pp.includes(8)&&!pb.includes(0)){rack();msg='Bola 8 masuk saat break, bola disusun ulang';state='aim';return}
+ if(pb.includes(0))why='bola putih masuk';
+ else if(f==null)why='tidak menyentuh bola';
+ else if(G){const cb=left(G)+pp.filter(n=>n!=8&&gn(n)==G).length==0;if(f==8?!cb:gn(f)!=G)why='salah sasaran'}
+ else if(f==8)why='bola 8 disentuh lebih dulu';
+ if(!why&&brk&&!pp.length&&shot.cu.size<4)why='break tidak sah';
+ if(!why&&!pp.length&&!shot.rail)why='tidak ada bola kena tepi';
+ if(pp.includes(8)){finish(!why&&G&&left(G)==0?me:o);return}
+ if(!G&&!brk&&!why&&pp.length){grp[me]=gn(pp[0]);grp[o]=grp[me]=='Bulat'?'Strip':'Bulat';G=grp[me]}
  brk=false;
- const own=G?pp.some(n=>gn(n)==G):pp.length>0;
- if(pb.includes(0)){const c=balls[0];c.out=false;c.x=280;c.y=280;c.vx=c.vy=0}
- if(foul){turn=o;hand=true;msg='Foul! Pemain '+(o+1)+' boleh letakkan bola putih'}
+ const own=G?pp.some(n=>gn(n)==G):pp.length>0,c=balls[0];
+ if(pb.includes(0)){c.out=false;c.x=280;c.y=280}
+ c.vx=c.vy=c.top=c.side=0;
+ if(why){turn=o;hand=true;msg='Foul: '+why+'. Pemain '+(o+1)+' pegang bola putih'}
  else if(own)msg='Masuk! Lanjut main';
  else{turn=o;msg=''}
  state='aim';
@@ -79,7 +95,8 @@ function finish(w){state='over';msg='Pemain '+(w+1)+' menang! Ketuk untuk main l
 
 const xy=e=>[(e.clientX-OX)/S,(e.clientY-OY)/S];
 const setA=(x,y)=>{a=Math.atan2(y-balls[0].y,x-balls[0].x)};
-const setP=y=>{power=Math.max(0,Math.min(1,(y-90)/380))};
+const setP=y=>{power=Math.max(0,Math.min(1,(y-215)/260))};
+const setS=(x,y)=>{let u=(x-1050)/36,v=(y-112)/36,m=Math.hypot(u,v);if(m>1){u/=m;v/=m}sx=u;sy=v};
 function place(x,y){
  x=Math.max(L+R,Math.min(Rt-R,x));y=Math.max(T+R,Math.min(B-R,y));
  if(balls.every(b=>b.n==0||b.out||Math.hypot(b.x-x,b.y-y)>=2*R)){balls[0].x=x;balls[0].y=y}
@@ -88,13 +105,13 @@ cv.addEventListener('pointerdown',e=>{
  const[x,y]=xy(e);cv.setPointerCapture(e.pointerId);
  if(state=='over'){newGame();return}
  if(state!='aim')return;
- if(x>1000){drag='p';setP(y)}
+ if(x>1000){if(y<170){drag='s';setS(x,y)}else{drag='p';setP(y)}}
  else if(hand){drag='h';place(x,y)}
  else{drag='a';setA(x,y)}
 });
 cv.addEventListener('pointermove',e=>{
  if(!drag)return;const[x,y]=xy(e);
- if(drag=='p')setP(y);else if(drag=='h')place(x,y);else setA(x,y);
+ if(drag=='p')setP(y);else if(drag=='s')setS(x,y);else if(drag=='h')place(x,y);else setA(x,y);
 });
 cv.addEventListener('pointerup',()=>{
  if(drag=='p'){if(power>.04)shoot();else power=0}
@@ -143,15 +160,19 @@ function draw(){
   const dx=Math.cos(a),dy=Math.sin(a),pull=R+6+power*70;
   g.strokeStyle='#e2c48d';g.lineWidth=7;g.lineCap='round';
   g.beginPath();g.moveTo(c.x-dx*pull,c.y-dy*pull);g.lineTo(c.x-dx*(pull+280),c.y-dy*(pull+280));g.stroke();
+  g.fillStyle='#d62828';g.beginPath();g.arc(c.x+sx*R*.6,c.y+sy*R*.6,2.5,0,7);g.fill();
  }
  g.textBaseline='middle';g.fillStyle='#f0e3cf';g.font='600 17px sans-serif';g.textAlign='left';
  if(state!='over')g.fillText('Giliran: Pemain '+(turn+1)+(grp[turn]?' ('+grp[turn]+')':''),50,26);
  if(msg&&state!='over')g.fillText(msg,300,26);
- g.fillStyle='#2a2320';g.beginPath();g.roundRect(1042,90,16,380,8);g.fill();
- g.fillStyle='#e2a53b';g.beginPath();g.roundRect(1042,90,16,Math.max(power*380,1),8);g.fill();
- g.fillStyle='#f0e3cf';g.beginPath();g.arc(1050,90+power*380,20,0,7);g.fill();
- g.font='600 15px sans-serif';g.textAlign='center';
- g.fillText('Kekuatan',1050,60);g.fillText('Tarik ke bawah',1050,500);g.fillText('lepas = pukul',1050,522);
+ g.fillStyle='#2a2320';g.beginPath();g.roundRect(1042,215,16,260,8);g.fill();
+ g.fillStyle='#e2a53b';g.beginPath();g.roundRect(1042,215,16,Math.max(power*260,1),8);g.fill();
+ g.fillStyle='#f0e3cf';g.beginPath();g.arc(1050,215+power*260,20,0,7);g.fill();
+ g.beginPath();g.arc(1050,112,36,0,7);g.fill();
+ g.strokeStyle='#8a7a66';g.lineWidth=1;g.beginPath();g.moveTo(1014,112);g.lineTo(1086,112);g.moveTo(1050,76);g.lineTo(1050,148);g.stroke();
+ g.fillStyle='#d62828';g.beginPath();g.arc(1050+sx*28,112+sy*28,7,0,7);g.fill();
+ g.fillStyle='#f0e3cf';g.font='600 15px sans-serif';g.textAlign='center';
+ g.fillText('Putaran',1050,52);g.fillText('Kekuatan',1050,190);g.fillText('Tarik ke bawah',1050,498);g.fillText('lepas = pukul',1050,520);
  if(state=='over'){
   g.fillStyle='rgba(0,0,0,.6)';g.fillRect(L,T,Rt-L,B-T);
   g.fillStyle='#f0e3cf';g.font='700 38px sans-serif';g.fillText(msg,500,280);
