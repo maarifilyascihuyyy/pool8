@@ -1,0 +1,4 @@
+node_modules/
+web/android/
+web/package-lock.json
+*.apk

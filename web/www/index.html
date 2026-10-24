@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="id"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<title>8 Ball Pool</title>
+<style>
+html,body{margin:0;height:100%;background:#14110f;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+canvas{display:block;width:100%;height:100%}
+</style></head><body><canvas id="c"></canvas>
+<script>
+const cv=document.getElementById('c'),g=cv.getContext('2d');
+const LW=1100,LH=560,L=40,T=40,Rt=960,B=520,R=12,N=4,FR=Math.pow(.987,1/N);
+const COL=[0,'#f2b705','#1f4fd8','#d62828','#6a2c91','#f07b1a','#0f7a3d','#8a2a1a'];
+const PK=[[L-4,T-4,26],[Rt+4,T-4,26],[L-4,B+4,26],[Rt+4,B+4,26],[500,T-8,24],[500,B+8,24]];
+let S=1,OX=0,OY=0,balls,turn,grp,hand,brk,state,msg,a,power,shot,drag=null;
+
+function fit(){const d=devicePixelRatio||1,w=innerWidth,h=innerHeight;cv.width=w*d;cv.height=h*d;
+ S=Math.min(w/LW,h/LH);OX=(w-LW*S)/2;OY=(h-LH*S)/2;g.setTransform(S*d,0,0,S*d,OX*d,OY*d)}
+addEventListener('resize',fit);fit();
+
+function newGame(){
+ const nums=[1,2,3,4,5,6,7,9,10,11,12,13,14,15].sort(()=>Math.random()-.5);nums.splice(4,0,8);
+ balls=[{n:0,x:280,y:280,vx:0,vy:0}];
+ const dx=R*1.732+.5,dy=2*R+.5;let k=0;
+ for(let c=0;c<5;c++)for(let r=0;r<=c;r++)balls.push({n:nums[k++],x:700+c*dx,y:280+(r-c/2)*dy,vx:0,vy:0});
+ turn=0;grp=[null,null];hand=false;brk=true;state='aim';a=0;power=0;
+ msg='Geser di meja untuk membidik, tarik tuas kanan untuk memukul';
+}
+
+function step(){
+ for(const b of balls){
+  if(b.out)continue;
+  b.x+=b.vx/N;b.y+=b.vy/N;
+  for(const p of PK)if(Math.hypot(b.x-p[0],b.y-p[1])<p[2]){b.out=true;b.vx=b.vy=0;shot.p.push(b.n);break}
+  if(b.out)continue;
+  if(b.x<L+R){b.x=L+R;b.vx=Math.abs(b.vx)*.8}
+  if(b.x>Rt-R){b.x=Rt-R;b.vx=-Math.abs(b.vx)*.8}
+  if(b.y<T+R){b.y=T+R;b.vy=Math.abs(b.vy)*.8}
+  if(b.y>B-R){b.y=B-R;b.vy=-Math.abs(b.vy)*.8}
+  b.vx*=FR;b.vy*=FR;
+  if(Math.hypot(b.vx,b.vy)<.12)b.vx=b.vy=0;
+ }
+ for(let i=0;i<balls.length;i++){const p=balls[i];if(p.out)continue;
+  for(let j=i+1;j<balls.length;j++){const q=balls[j];if(q.out)continue;
+   const dx=q.x-p.x,dy=q.y-p.y,d=Math.hypot(dx,dy);
+   if(d<2*R&&d>0){
+    const nx=dx/d,ny=dy/d,ov=(2*R-d)/2;
+    p.x-=nx*ov;p.y-=ny*ov;q.x+=nx*ov;q.y+=ny*ov;
+    const rv=(q.vx-p.vx)*nx+(q.vy-p.vy)*ny;
+    if(rv<0){const im=-(1+.96)*rv/2;
+     p.vx-=im*nx;p.vy-=im*ny;q.vx+=im*nx;q.vy+=im*ny;
+     if(shot.first==null&&(p.n==0||q.n==0))shot.first=p.n==0?q.n:p.n}
+   }}}
+}
+
+function shoot(){
+ const c=balls[0],s=power*26;
+ c.vx=Math.cos(a)*s;c.vy=Math.sin(a)*s;power=0;
+ shot={first:null,p:[]};state='roll';msg='';
+}
+
+function endShot(){
+ const me=turn,o=1-me,pb=shot.p,pp=pb.filter(n=>n>0);
+ const gn=n=>n<8?'Bulat':'Strip';
+ const left=G=>balls.filter(b=>!b.out&&b.n>0&&b.n!=8&&gn(b.n)==G).length;
+ let foul=pb.includes(0)||shot.first==null,G=grp[me];
+ if(!foul&&G){const f=shot.first,cb=left(G)+pp.filter(n=>n!=8&&gn(n)==G).length==0;
+  if(f==8?!cb:gn(f)!=G)foul=true}
+ if(pp.includes(8)){const ok=!foul&&G&&left(G)==0;finish(ok?me:o);return}
+ if(!G&&!brk&&!foul&&pp.length){grp[me]=gn(pp[0]);grp[o]=grp[me]=='Bulat'?'Strip':'Bulat';G=grp[me]}
+ brk=false;
+ const own=G?pp.some(n=>gn(n)==G):pp.length>0;
+ if(pb.includes(0)){const c=balls[0];c.out=false;c.x=280;c.y=280;c.vx=c.vy=0}
+ if(foul){turn=o;hand=true;msg='Foul! Pemain '+(o+1)+' boleh letakkan bola putih'}
+ else if(own)msg='Masuk! Lanjut main';
+ else{turn=o;msg=''}
+ state='aim';
+}
+function finish(w){state='over';msg='Pemain '+(w+1)+' menang! Ketuk untuk main lagi'}
+
+const xy=e=>[(e.clientX-OX)/S,(e.clientY-OY)/S];
+const setA=(x,y)=>{a=Math.atan2(y-balls[0].y,x-balls[0].x)};
+const setP=y=>{power=Math.max(0,Math.min(1,(y-90)/380))};
+function place(x,y){
+ x=Math.max(L+R,Math.min(Rt-R,x));y=Math.max(T+R,Math.min(B-R,y));
+ if(balls.every(b=>b.n==0||b.out||Math.hypot(b.x-x,b.y-y)>=2*R)){balls[0].x=x;balls[0].y=y}
+}
+cv.addEventListener('pointerdown',e=>{
+ const[x,y]=xy(e);cv.setPointerCapture(e.pointerId);
+ if(state=='over'){newGame();return}
+ if(state!='aim')return;
+ if(x>1000){drag='p';setP(y)}
+ else if(hand){drag='h';place(x,y)}
+ else{drag='a';setA(x,y)}
+});
+cv.addEventListener('pointermove',e=>{
+ if(!drag)return;const[x,y]=xy(e);
+ if(drag=='p')setP(y);else if(drag=='h')place(x,y);else setA(x,y);
+});
+cv.addEventListener('pointerup',()=>{
+ if(drag=='p'){if(power>.04)shoot();else power=0}
+ if(drag=='h')hand=false;
+ drag=null;
+});
+
+function ball(n,x,y,r){
+ const c=n==0?'#f4f1e8':n==8?'#161616':COL[n>8?n-8:n];
+ g.save();g.beginPath();g.arc(x,y,r,0,7);g.clip();
+ g.fillStyle=n>8?'#f4f1e8':c;g.fillRect(x-r,y-r,2*r,2*r);
+ if(n>8){g.fillStyle=c;g.fillRect(x-r,y-r*.56,2*r,r*1.12)}
+ if(n>0){g.fillStyle='#f4f1e8';g.beginPath();g.arc(x,y,r*.46,0,7);g.fill();
+  g.fillStyle='#111';g.font='bold '+r*.7+'px sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillText(n,x,y+.5)}
+ g.restore();
+ g.fillStyle='rgba(255,255,255,.35)';g.beginPath();g.arc(x-r*.35,y-r*.4,r*.2,0,7);g.fill();
+}
+
+function draw(){
+ g.fillStyle='#14110f';g.fillRect(-2000,-2000,5000,5000);
+ g.fillStyle='#4a2f1d';g.beginPath();g.roundRect(10,10,980,540,26);g.fill();
+ g.fillStyle='#1f7a52';g.fillRect(L,T,Rt-L,B-T);
+ g.fillStyle='#0b0b0b';for(const p of PK){g.beginPath();g.arc(p[0],p[1],p[2]+2,0,7);g.fill()}
+ const c=balls[0];
+ if(state=='aim'){
+  if(hand){g.strokeStyle='#e2a53b';g.lineWidth=3;g.beginPath();g.arc(c.x,c.y,R+7,0,7);g.stroke()}
+  else{
+   const dx=Math.cos(a),dy=Math.sin(a);let t=1e9,hit=null;
+   for(const b of balls){if(b.out||b==c)continue;
+    const fx=b.x-c.x,fy=b.y-c.y,pr=fx*dx+fy*dy;if(pr<=0)continue;
+    const q=fx*fx+fy*fy-pr*pr;
+    if(q<4*R*R){const s=pr-Math.sqrt(4*R*R-q);if(s<t){t=s;hit=b}}}
+   const tw=Math.min(dx>0?(Rt-R-c.x)/dx:dx<0?(L+R-c.x)/dx:1e9,dy>0?(B-R-c.y)/dy:dy<0?(T+R-c.y)/dy:1e9);
+   if(tw<t){t=tw;hit=null}
+   const ex=c.x+dx*t,ey=c.y+dy*t;
+   g.setLineDash([8,8]);g.strokeStyle='rgba(255,255,255,.7)';g.lineWidth=2;
+   g.beginPath();g.moveTo(c.x,c.y);g.lineTo(ex,ey);g.stroke();g.setLineDash([]);
+   g.beginPath();g.arc(ex,ey,R,0,7);g.stroke();
+   if(hit){const nx=hit.x-ex,ny=hit.y-ey,m=Math.hypot(nx,ny)||1;
+    g.beginPath();g.moveTo(hit.x,hit.y);g.lineTo(hit.x+nx/m*70,hit.y+ny/m*70);g.stroke()}
+  }
+ }
+ let k=0;
+ for(const b of balls){if(b.out){if(b.n>0)ball(b.n,70+k++*26,535,9)}else ball(b.n,b.x,b.y,R)}
+ if(state=='aim'&&!hand){
+  const dx=Math.cos(a),dy=Math.sin(a),pull=R+6+power*70;
+  g.strokeStyle='#e2c48d';g.lineWidth=7;g.lineCap='round';
+  g.beginPath();g.moveTo(c.x-dx*pull,c.y-dy*pull);g.lineTo(c.x-dx*(pull+280),c.y-dy*(pull+280));g.stroke();
+ }
+ g.textBaseline='middle';g.fillStyle='#f0e3cf';g.font='600 17px sans-serif';g.textAlign='left';
+ if(state!='over')g.fillText('Giliran: Pemain '+(turn+1)+(grp[turn]?' ('+grp[turn]+')':''),50,26);
+ if(msg&&state!='over')g.fillText(msg,300,26);
+ g.fillStyle='#2a2320';g.beginPath();g.roundRect(1042,90,16,380,8);g.fill();
+ g.fillStyle='#e2a53b';g.beginPath();g.roundRect(1042,90,16,Math.max(power*380,1),8);g.fill();
+ g.fillStyle='#f0e3cf';g.beginPath();g.arc(1050,90+power*380,20,0,7);g.fill();
+ g.font='600 15px sans-serif';g.textAlign='center';
+ g.fillText('Kekuatan',1050,60);g.fillText('Tarik ke bawah',1050,500);g.fillText('lepas = pukul',1050,522);
+ if(state=='over'){
+  g.fillStyle='rgba(0,0,0,.6)';g.fillRect(L,T,Rt-L,B-T);
+  g.fillStyle='#f0e3cf';g.font='700 38px sans-serif';g.fillText(msg,500,280);
+ }
+}
+
+function loop(){
+ if(state=='roll'){for(let i=0;i<N;i++)step();
+  if(!balls.some(b=>!b.out&&(b.vx||b.vy)))endShot()}
+ draw();requestAnimationFrame(loop);
+}
+newGame();loop();
+</script></body></html>
